@@ -62,39 +62,8 @@ extern std::string nfc_storage_path;
 static struct timeval timer_start;
 static struct timeval timer_end;
 
+#define DEFAULT_CRASH_NFCSNOOP_PATH "/data/misc/nfc/logs/native_crash_logs"
 static const off_t NATIVE_CRASH_FILE_SIZE = (1024 * 1024);
-
-void storeNativeCrashLogs(void) {
-  std::string filename = "/native_crash_logs";
-  std::string filepath = nfc_storage_path + filename;
-  int fileStream;
-  off_t fileSize;
-  DLOG_IF(INFO, nfc_debug_enabled)
-      << StringPrintf("%s: file=%s", __func__, filepath.c_str());
-  // check file size
-  struct stat st;
-  if (stat(filepath.c_str(), &st) == 0) {
-    fileSize = st.st_size;
-  } else {
-    fileSize = 0;
-  }
-
-  if (fileSize >= NATIVE_CRASH_FILE_SIZE) {
-    fileStream =
-        open(filepath.c_str(), O_RDWR | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR);
-  } else {
-    fileStream =
-        open(filepath.c_str(), O_RDWR | O_CREAT | O_APPEND, S_IRUSR | S_IWUSR);
-  }
-
-  if (fileStream >= 0) {
-    debug_nfcsnoop_dump(fileStream);
-    close(fileStream);
-  } else {
-    LOG(ERROR) << StringPrintf("%s: fail to create, error = %d", __func__,
-                               errno);
-  }
-}
 
 /*******************************************************************************
 **
@@ -136,7 +105,7 @@ void nfc_ncif_update_window(void) {
 void nfc_ncif_cmd_timeout(void) {
   LOG(ERROR) << StringPrintf("nfc_ncif_cmd_timeout");
 
-  storeNativeCrashLogs();
+  storeNfcSnoopLogs(DEFAULT_CRASH_NFCSNOOP_PATH, NATIVE_CRASH_FILE_SIZE);
 
   /* report an error */
   nfc_ncif_event_status(NFC_GEN_ERROR_REVT, NFC_STATUS_HW_TIMEOUT);
@@ -1555,34 +1524,42 @@ void nfc_ncif_proc_ee_discover_req(uint8_t* p, uint16_t plen) {
 ** Returns          void
 **
 *******************************************************************************/
-void nfc_ncif_proc_get_routing(uint8_t* p,
-                               __attribute__((unused)) uint8_t len) {
+void nfc_ncif_proc_get_routing(uint8_t* p, uint8_t len) {
   tNFC_GET_ROUTING_REVT evt_data;
-  uint8_t more, num_entries, xx, yy, *pn, tl;
+  uint8_t more, num_entries, xx, *pn;
   tNFC_STATUS status = NFC_STATUS_CONTINUE;
 
-  if (nfc_cb.p_resp_cback) {
+  if (len >= 2 && nfc_cb.p_resp_cback) {
     more = *p++;
     num_entries = *p++;
+    if (num_entries == 0) return;
+    len -= 2;
+    if (len < 2) {
+      LOG(ERROR) << StringPrintf("Invalid len=%d", len);
+      return;
+    }
     for (xx = 0; xx < num_entries; xx++) {
       if ((more == false) && (xx == (num_entries - 1))) status = NFC_STATUS_OK;
       evt_data.status = (tNFC_STATUS)status;
-      evt_data.nfcee_id = *p++;
-      evt_data.num_tlvs = *p++;
-      evt_data.tlv_size = 0;
-      pn = evt_data.param_tlvs;
-      for (yy = 0; yy < evt_data.num_tlvs; yy++) {
-        tl = *(p + 1);
-        tl += NFC_TL_SIZE;
-        evt_data.tlv_size += tl;
-        if (evt_data.tlv_size > NFC_MAX_EE_TLV_SIZE) {
-          android_errorWriteLog(0x534e4554, "117554809");
-          LOG(ERROR) << __func__ << "Invalid data format";
-          return;
-        }
-        STREAM_TO_ARRAY(pn, p, tl);
-        pn += tl;
+      if (len >= 2)
+        len -= 2;
+      else
+        return;
+      evt_data.qualifier_type = *p++;
+      evt_data.num_tlvs = 1;
+      evt_data.tlv_size = *p++;
+      if (evt_data.tlv_size > NFC_MAX_EE_TLV_SIZE) {
+        android_errorWriteLog(0x534e4554, "117554809");
+        LOG(ERROR) << __func__ << "Invalid data format";
+        return;
       }
+      if (evt_data.tlv_size > len) {
+        LOG(ERROR) << StringPrintf("Invalid evt_data.tlv_size");
+        return;
+      } else
+        len -= evt_data.tlv_size;
+      pn = evt_data.param_tlvs;
+      STREAM_TO_ARRAY(pn, p, evt_data.tlv_size);
       tNFC_RESPONSE nfc_response;
       nfc_response.get_routing = evt_data;
       (*nfc_cb.p_resp_cback)(NFC_GET_ROUTING_REVT, &nfc_response);
