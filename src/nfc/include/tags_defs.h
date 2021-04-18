@@ -472,10 +472,13 @@ typedef uint8_t tT3T_POLL_RC;
 /* Protocol format is extended. Reserved for future use */
 #define I93_FLAG_PROT_EXT_YES 0x08
 
-/* Request is addressed. UID field is included. It shall be executed only by
- * VICC */
+/* Request is addressed with AMS (Address Mode Selector). UID field is included.
+ * It shall be executed only by VICC */
 #define I93_FLAG_ADDRESS_SET 0x20
 /* whose UID matches the UID specified in the request */
+/* Request is addressed with SMS (Select Mode Selector). UID field is included
+ * or not.  It shall be executed by the unique VICC to be in SELECTED state */
+#define I93_FLAG_SELECT_SET 0x10
 
 /* AFI field is present     */
 #define I93_FLAG_AFI_PRESENT 0x10
@@ -532,6 +535,7 @@ typedef uint8_t tT3T_POLL_RC;
 #define I93_CMD_GET_MULTI_BLK_SEC 0x2C
 /* Get extended multiple block security status */
 #define I93_CMD_EXT_GET_MULTI_BLK_SEC 0x3C
+#define I93_CMD_SET_ADDR_MODE 0x3D /* Set address mode            */
 
 /* Information flags definition */
 /* DSFID is supported and DSFID field is present */
@@ -560,6 +564,11 @@ typedef uint8_t tT3T_POLL_RC;
 /* Max block size in bytes */
 #define I93_MAX_BLOCK_LENGH 32
 
+/* Block lengths */
+#define I93_BLEN_4BYTES 0x04
+#define I93_BLEN_8BYTES 0x08
+#define I93_BLEN_16BYTES 0x10
+#define I93_BLEN_32BYTES 0x20
 /* ICODE Capability Container(CC) definition */
 #define I93_ICODE_CC_MAGIC_NUMER_E1 0xE1 /* magic number in CC[0]  */
 #define I93_ICODE_CC_MAGIC_NUMER_E2 0xE2 /* magic number in CC[0]  */
@@ -580,6 +589,8 @@ typedef uint8_t tT3T_POLL_RC;
 /* More than 2040 bytes are supported in CC[3] */
 #define I93_STM_CC_OVERFLOW_MASK 0x04
 #define I93_ONS_CC_OVERFLOW_MASK 0x04
+/* Special Frame are supported in CC[3] */
+#define I93_ICODE_CC_SPECIAL_FRAME_MASK 0x10
 
 /* ICODE TLV type */
 #define I93_ICODE_TLV_TYPE_NULL 0x00 /* NULL TLV         */
